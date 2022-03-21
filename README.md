@@ -3,7 +3,8 @@
 AWS IoT GreenGrass v2 does not allow to run any Docker application container if GreenGrass itself is running inside a Docker container. This container image is built on the official AWS Iot GreenGrass version 2 docker image to run your containerized applications. Therefore, you can also follow the official AWS IoT GreenGrass v2 guideline to use any AWS Iot GreenGrass related operations. Before using in production please read the following [blog](https://jpetazzo.github.io/2015/09/03/do-not-use-docker-in-docker-for-ci/).
 
 ## Example Architecture Diagram for the Solution
-You can use this solution as standalone or you can integrate it to a container management tool like Amazon ECS Anywhere. For using it with container management tool, you can find an example target deployment architecture for Amazon ECS Anywhere below: 
+You can use this solution as standalone or you can integrate it to a container orchestration tool like Amazon ECS Anywhere. For using it with container orchestration
+tool, you can find an example target deployment architecture for Amazon ECS Anywhere below: 
 
 ![Architecture Diagram](docs/example-arch-diagram.png)
 
