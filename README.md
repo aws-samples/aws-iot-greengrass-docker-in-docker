@@ -16,7 +16,7 @@ For standalone usage, you can use AWS credential. But, if you have an environmen
 
 `path_to_dir/greengrass-v2-credentials/credentials`
 
-Example Credential file:
+Example "credentials" file:
 
 ```
 [default]
