@@ -4,7 +4,7 @@ AWS IoT GreenGrass v2 does not allow to run any Docker application container if 
 
 ## Example Architecture Diagram for the Solution
 You can use this solution as standalone or you can integrate it to a container orchestration tool like Amazon ECS Anywhere. For using it with container orchestration
-tool, you can find an example target deployment architecture for Amazon ECS Anywhere below: 
+tool, you can find an example of target deployment architecture for Amazon ECS Anywhere below:
 
 ![Architecture Diagram](docs/example-arch-diagram.png)
 
@@ -28,7 +28,7 @@ aws_secret_access_key = <YourSecretKey>
 You can provide your environment file like below. 
  
 ### Provide Your Environment File for Provisioning
-Create env file and copy your config accordingly. 
+Create "env.cfg" file and copy your config accordingly. 
 
 `nano env.cfg`
 ```
@@ -50,7 +50,7 @@ COMPONENT_DEFAULT_USER=ggc_user:ggc_group
 `docker exec -it CONTAINER_ID /bin/sh`
 
 ## Available Commands in Image
-Docker is already installed in the container image, after you log in, you can use docker commands to manage application containers
+Docker is already installed in the container image. After you log in, you can use docker commands to manage application containers
 
 ## Security
 
