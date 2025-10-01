@@ -1,33 +1,71 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
 
-FROM public.ecr.aws/q3k3q7c1/aws-iot-greengrass-v2:2.5.3-0
+# Multi-stage build: First stage builds the latest Greengrass image
+FROM amazonlinux:2023 as greengrass-builder
 
-RUN 	yum install -y	ca-certificates \
-# Workaround for golang not producing a static ctr binary on Go 1.15 and up https://github.com/containerd/containerd/issues/5824
-		yum install -y libc6-compat \
-# DOCKER_HOST=ssh://... -- https://github.com/docker/cli/pull/1014
-		yum install -y openssh-client
+# Replace the args to lock to a specific version
+ARG GREENGRASS_RELEASE_VERSION=latest
+ARG GREENGRASS_ZIP_FILE=greengrass-${GREENGRASS_RELEASE_VERSION}.zip
+ARG GREENGRASS_RELEASE_URI=https://d2s8p88vqu9w66.cloudfront.net/releases/${GREENGRASS_ZIP_FILE}
+
+# Author
+LABEL maintainer="AWS IoT Greengrass"
+
+# Greengrass Version
+LABEL greengrass-version=${GREENGRASS_RELEASE_VERSION}
+
+# Set up Greengrass v2 execution parameters
+# TINI_KILL_PROCESS_GROUP allows forwarding SIGTERM to all PIDs in the PID group so Greengrass can exit gracefully
+ENV TINI_KILL_PROCESS_GROUP=1 \
+    GGC_ROOT_PATH=/greengrass/v2 \
+    PROVISION=false \
+    AWS_REGION=us-east-1 \
+    THING_NAME=default_thing_name \
+    THING_GROUP_NAME=default_thing_group_name \
+    TES_ROLE_NAME=default_tes_role_name \
+    TES_ROLE_ALIAS_NAME=default_tes_role_alias_name \
+    COMPONENT_DEFAULT_USER=default_component_user \
+    DEPLOY_DEV_TOOLS=false \
+    INIT_CONFIG=default_init_config \
+    TRUSTED_PLUGIN=default_trusted_plugin_path \
+    THING_POLICY_NAME=default_thing_policy_name
+
+RUN env
+
+# Install Greengrass v2 dependencies
+RUN yum update -y && \
+    yum install -y tar unzip wget sudo procps which shadow-utils python3 java-11-amazon-corretto-headless && \
+    wget $GREENGRASS_RELEASE_URI && \
+    rm -rf /var/cache/yum && \
+    mkdir -p /opt/greengrassv2 $GGC_ROOT_PATH && \
+    unzip $GREENGRASS_ZIP_FILE -d /opt/greengrassv2 && \
+    rm $GREENGRASS_ZIP_FILE
+
+# Second stage: Add Docker-in-Docker capabilities to the Greengrass image
+FROM greengrass-builder
+
+# Install Docker-in-Docker dependencies
+RUN yum install -y ca-certificates \
+    openssh-clients
 
 ENV DOCKER_VERSION 20.10.12
 
+# Install Docker binaries
 RUN set -eux; \
 	\
-	apkArch="$(arch)"; \
-	case "$apkArch" in \
+	arch="$(uname -m)"; \
+	case "$arch" in \
 		'x86_64') \
 			url='https://download.docker.com/linux/static/stable/x86_64/docker-20.10.12.tgz'; \
 			;; \
-		'armhf') \
-			url='https://download.docker.com/linux/static/stable/armel/docker-20.10.12.tgz'; \
-			;; \
-		'armv7') \
+		'armv7l') \
 			url='https://download.docker.com/linux/static/stable/armhf/docker-20.10.12.tgz'; \
 			;; \
 		'aarch64') \
 			url='https://download.docker.com/linux/static/stable/aarch64/docker-20.10.12.tgz'; \
 			;; \
-		*) echo >&2 "error: unsupported architecture ($apkArch)"; exit 1 ;; \
+		*) echo >&2 "error: unsupported architecture ($arch)"; exit 1 ;; \
 	esac; \
 	\
 	wget -O docker.tgz "$url"; \
@@ -42,9 +80,19 @@ RUN set -eux; \
 	dockerd --version; \
 	docker --version
 
+# Copy Greengrass entrypoint scripts
+COPY "greengrass-entrypoint.sh" /
+COPY "modify-sudoers.sh" /
+
+# Copy Docker entrypoint scripts
 COPY "modprobe.sh" /usr/local/bin/modprobe
 COPY docker-entrypoint.sh /usr/local/bin/
 COPY dockerd-entrypoint.sh /usr/local/bin/
+
+# Make scripts executable and modify sudoers
+RUN chmod +x /greengrass-entrypoint.sh && \
+    chmod +x /modify-sudoers.sh && \
+    ./modify-sudoers.sh
 
 # https://github.com/docker-library/docker/pull/166
 #   dockerd-entrypoint.sh uses DOCKER_TLS_CERTDIR for auto-generating TLS certificates
@@ -55,25 +103,22 @@ ENV DOCKER_TLS_CERTDIR=/certs
 RUN mkdir /certs /certs/client && chmod 1777 /certs /certs/client
 # (doing both /certs and /certs/client so that if Docker does a "copy-up" into a volume defined on /certs/client, it will "do the right thing" by default in a way that still works for rootless users)
 
+# Install additional Docker dependencies
 RUN set -eux; \
-	yum install -y	btrfs-progs \
-	yum install -y	e2fsprogs \
-	yum install -y	e2fsprogs-extra \
-	yum install -y	ip6tables \
-	yum install -y	iptables \
-	yum install -y	openssl \
-	yum install -y	shadow-uidmap \
-	yum install -y	xfsprogs \
-	yum install -y	xz \
-	yum install -y	pigz \
-    yum install shadow-utils.x86_64 -y \
-    yum install shadow-utils -y \
+	yum install -y \
+		e2fsprogs \
+		iproute \
+		iptables \
+		openssl \
+		xfsprogs \
+		xz \
+		pigz \
+		device-mapper \
 	; \
-# only install zfs if it's available for the current architecture
-# https://git.alpinelinux.org/cgit/aports/tree/main/zfs/APKBUILD?h=3.6-stable#n9 ("all !armhf !ppc64le" as of 2017-11-01)
-# "apk info XYZ" exits with a zero exit code but no output when the package exists but not for this arch
-	if zfs="$(yum info --quiet zfs)" && [ -n "$zfs" ]; then \
-		yum install -y --no-cache zfs; \
+# Install optional packages if available
+	yum install -y btrfs-progs || echo "btrfs-progs not available, skipping"; \
+	if yum list available zfs 2>/dev/null | grep -q zfs; then \
+		yum install -y zfs; \
 	fi
 
 # set up subuid/subgid so that "--userns-remap=default" works out-of-the-box
@@ -93,7 +138,9 @@ RUN set -eux; \
 VOLUME /var/lib/docker
 EXPOSE 2375 2376
  
-#RUN chmod +x /usr/local/bin/docker-entrypoint.sh && /usr/local/bin/dockerd-entrypoint.sh
+# Make Docker entrypoint scripts executable
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh && \
+    chmod +x /usr/local/bin/dockerd-entrypoint.sh
 
 ENTRYPOINT ["/bin/sh", "-c"]
 
