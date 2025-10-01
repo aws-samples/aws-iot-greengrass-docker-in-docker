@@ -1,0 +1,29 @@
+# Credentials and sensitive files
+*.pem
+*.key
+*.crt
+credentials
+.aws/
+greengrass-v2-credentials/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+
+# Docker volumes and data
+docker-data/
+greengrass-data/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+Thumbs.db
