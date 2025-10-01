@@ -9,5 +9,25 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: aws-iot-greengrass
-    image: x86_64/aws-iot-greengrass:2.5.3
+      args:
+        - GREENGRASS_RELEASE_VERSION=latest
+    container_name: greengrass-dind-thing
+    image: x86_64/aws-iot-greengrass:latest
+    privileged: true
+    environment:
+      - PROVISION=true
+      - AWS_REGION=eu-west-1
+      # AWS Credentials (Optional - uncomment if not using IAM roles or ~/.aws/credentials)
+      # - AWS_ACCESS_KEY_ID=TYPUIOSFODNN7EXAMPLE
+      # - AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/KPTYNG/bPxRfiCYEXAMPLEKEY
+      # - AWS_SESSION_TOKEN=AQoTYPRzEJr1K...o5OTYRAwEXAMPLE=  # Optional for temporary credentials
+      - THING_NAME=MyGreengrassCore-Test
+      - THING_GROUP_NAME=MyGreengrassCoreGroup-Test
+      - TES_ROLE_NAME=GreengrassV2TokenExchangeRole
+      - TES_ROLE_ALIAS_NAME=GreengrassV2TokenExchangeRoleAlias
+      - COMPONENT_DEFAULT_USER=ggc_user:ggc_group
+      - DEPLOY_DEV_TOOLS=true
+    volumes:
+      - /var/lib/docker
+      # AWS Credentials volume (Optional - uncomment if using ~/.aws/credentials file)
+      # - ~/.aws:/root/.aws:ro
